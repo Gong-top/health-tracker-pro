@@ -1,0 +1,7 @@
+node_modules/ 
+target/ 
+.idea/ 
+.idea/ 
+uploads/ 
+*.db 
+*.sqlite3 

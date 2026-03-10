@@ -7,19 +7,22 @@ const Dashboard = ({ userId }) => {
   const [trendData, setTrendData] = useState([]);
   const [exerciseSummary, setExerciseSummary] = useState({ total_duration: 0, total_calories: 0 });
 
+  const API_BASE = "https://health-tracker-pro-production.up.railway.app/api";
+
   useEffect(() => {
+    const timestamp = new Date().getTime();
     // 1. 获取周报 (只含已启用习惯)
-    fetch(`http://localhost:8080/api/report/weekly/${userId}`)
+    fetch(`${API_BASE}/report/weekly/${userId}?t=${timestamp}`)
       .then(res => res.json())
       .then(data => setWeeklyReport(data));
 
     // 2. 获取打卡趋势图表数据
-    fetch(`http://localhost:8080/api/report/trend/${userId}`)
+    fetch(`${API_BASE}/report/trend/${userId}?t=${timestamp}`)
       .then(res => res.json())
       .then(data => setTrendData(data));
 
     // 3. 获取本周运动汇总
-    fetch(`http://localhost:8080/api/report/exercise/summary/${userId}`)
+    fetch(`${API_BASE}/report/exercise/summary/${userId}?t=${timestamp}`)
       .then(res => res.json())
       .then(data => {
         if (data && data.length > 0) {

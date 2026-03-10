@@ -34,9 +34,31 @@ public class ReportRepository {
         jdbcTemplate.update(sql, nickname, email, userId);
     }
 
-    // --- 报表模块 ---
+    // --- 报表模块 (增强版：直接查询不依赖视图) ---
     public List<Map<String, Object>> findWeeklyReport(Long userId) {
-        String sql = "SELECT * FROM user_weekly_report WHERE user_id = ?";
+        String sql = "SELECT " +
+                     "  uh.user_habit_id, " +
+                     "  coalesce(uh.custom_name, h.habit_name) as fact_name, " +
+                     "  uh.target_value as daily_target, " +
+                     "  uh.target_unit, " +
+                     "  (SELECT coalesce(sum(r.fact_value), 0) FROM record r WHERE r.user_habit_id = uh.user_habit_id AND r.record_date >= date_sub(curdate(), interval 7 day)) as total_finished, " +
+                     "  CASE WHEN uh.frequency_unit = 'day' THEN round(uh.target_value * 7, 1) ELSE round(uh.target_value, 1) END as weekly_target " +
+                     "FROM user_habit uh " +
+                     "JOIN habit h ON uh.habit_id = h.habit_id " +
+                     "WHERE uh.user_id = ? AND uh.user_habit_status = true";
+        List<Map<String, Object>> list = jdbcTemplate.queryForList(sql, userId);
+        // 后写计算百分比逻辑，防止 SQL 除以 0 报错
+        for (Map<String, Object> map : list) {
+            double finished = ((Number) map.get("total_finished")).doubleValue();
+            double target = ((Number) map.get("weekly_target")).doubleValue();
+            map.put("completion_rate_num", target > 0 ? Math.round((finished / target) * 1000) / 10.0 : 0);
+        }
+        return list;
+    }
+
+    public List<Map<String, Object>> getPunchTrend(Long userId) {
+        // 直接从统计表取数据，不再依赖趋势视图
+        String sql = "SELECT sta_date as record_date, finished_habits as daily_total FROM statistic WHERE user_id = ? ORDER BY sta_date ASC LIMIT 7";
         return jdbcTemplate.queryForList(sql, userId);
     }
 
@@ -65,13 +87,6 @@ public class ReportRepository {
         return jdbcTemplate.queryForList(sql, userId);
     }
 
-    public List<Map<String, Object>> findWeeklyExerciseSummary(Long userId) {
-        String sql = "SELECT coalesce(sum(duration), 0) as total_duration, coalesce(sum(calories), 0) as total_calories " +
-                     "FROM exercise_record " +
-                     "WHERE user_id = ? AND exercise_record_date BETWEEN date_sub(curdate(), interval 6 day) and curdate()";
-        return jdbcTemplate.queryForList(sql, userId);
-    }
-
     public Double findTodayPunchValue(Long userHabitId) {
         String sql = "SELECT COALESCE(SUM(fact_value), 0) FROM record WHERE user_habit_id = ? AND record_date = CURDATE()";
         return jdbcTemplate.queryForObject(sql, Double.class, userHabitId);
@@ -80,11 +95,6 @@ public class ReportRepository {
     public List<Map<String, Object>> callMonthlyReport(Long userId, String yearMonth) {
         String sql = "CALL monthly_report(?, ?)";
         return jdbcTemplate.queryForList(sql, userId, yearMonth);
-    }
-
-    public List<Map<String, Object>> getPunchTrend(Long userId) {
-        String sql = "SELECT sta_date as record_date, finished_habits as daily_total FROM daily_punch_trend WHERE user_id = ? ORDER BY sta_date ASC";
-        return jdbcTemplate.queryForList(sql, userId);
     }
 
     public List<Map<String, Object>> findUserHabits(Long userId) {

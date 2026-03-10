@@ -77,7 +77,7 @@ create table record(
     record_date date not null comment '记录日期',
     fact_value decimal(10,2) not null default 0 comment '实际完成值',
     record_status tinyint not null default 0 comment '状态（0为未完成，1为已完成）',
-    finish_time timestamp default null,
+    finish_time timestamp null default null,
     create_time timestamp default current_timestamp,
     update_time timestamp default current_timestamp on update current_timestamp,
     note text comment '备注',

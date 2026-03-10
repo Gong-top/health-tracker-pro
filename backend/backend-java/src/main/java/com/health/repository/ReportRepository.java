@@ -83,7 +83,7 @@ public class ReportRepository {
     }
 
     public List<Map<String, Object>> getPunchTrend(Long userId) {
-        String sql = "SELECT record_date, daily_total FROM daily_punch_trend WHERE user_id = ? ORDER BY record_date ASC";
+        String sql = "SELECT sta_date as record_date, finished_habits as daily_total FROM daily_punch_trend WHERE user_id = ? ORDER BY sta_date ASC";
         return jdbcTemplate.queryForList(sql, userId);
     }
 

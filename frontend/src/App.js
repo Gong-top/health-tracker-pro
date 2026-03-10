@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-ro
 import Dashboard from './Dashboard';
 import { LayoutDashboard, CheckSquare, Settings, Activity, LogOut, Heart, Plus, X, Trash2, Camera, Paperclip, Clock, Calendar, Database, UserCircle, Save, Edit3, Mail, User, Info, Flame, Thermometer, History, TrendingUp, CheckCircle, ExternalLink, Lock, UserPlus } from 'lucide-react';
 
-const API_BASE = "https://health-tracker-pro-production.up.railway.app/api";
+const API_BASE = "https://health-tracker-pro-231843-7-1410145219.sh.run.tcloudbase.com/api";
 
 // --- 用户认证组件 ---
 const Auth = ({ setAuth, setUserId, setNickname }) => {

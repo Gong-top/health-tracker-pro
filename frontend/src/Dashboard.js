@@ -7,7 +7,7 @@ const Dashboard = ({ userId }) => {
   const [trendData, setTrendData] = useState([]);
   const [exerciseSummary, setExerciseSummary] = useState({ total_duration: 0, total_calories: 0 });
 
-  const API_BASE = "https://health-tracker-pro-production.up.railway.app/api";
+  const API_BASE = "https://health-tracker-pro-231843-7-1410145219.sh.run.tcloudbase.com/api";
 
   useEffect(() => {
     const timestamp = new Date().getTime();

@@ -7,7 +7,7 @@ const Dashboard = ({ userId }) => {
   const [trendData, setTrendData] = useState([]);
   const [exerciseSummary, setExerciseSummary] = useState({ total_duration: 0, total_calories: 0 });
 // 核心配置：腾讯云后端 API 地址 (包含 /api)
-const API_BASE = "https://health-tracker-pro-231843-7-1410145219.sh.run.tcloudbase.com/api";
+const API_BASE = "https://health-tracker-p-231843-7-1410145219.sh.run.tcloudbase.com/api";
 
   useEffect(() => {
     const timestamp = new Date().getTime();

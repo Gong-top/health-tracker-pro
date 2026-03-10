@@ -1,15 +1,15 @@
-# 使用轻量级的 JDK 17 基础镜像
-FROM openjdk:17-jdk-alpine
-
-# 设置工作目录
+# 第一阶段：编译打包
+FROM maven:3.8.4-openjdk-17-slim AS build
 WORKDIR /app
+# 将整个后端代码复制进去
+COPY . .
+# 运行 Maven 打包 (跳过测试)
+RUN mvn clean package -DskipTests
 
-# 将本地的 JAR 包复制到镜像中
-# 注意：确保这里的 JAR 包名字和你刚才生成的一致
-COPY target/health-tracker-0.0.1-SNAPSHOT.jar app.jar
-
-# 暴露端口 (与 Spring Boot 配置一致)
+# 第二阶段：运行
+FROM openjdk:17-jdk-alpine
+WORKDIR /app
+# 从编译阶段复制生成的 JAR 包
+COPY --from=build /app/target/health-tracker-0.0.1-SNAPSHOT.jar app.jar
 EXPOSE 8080
-
-# 运行 JAR 包
 ENTRYPOINT ["java", "-jar", "app.jar"]

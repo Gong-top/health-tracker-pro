@@ -34,20 +34,15 @@ public class ReportRepository {
         jdbcTemplate.update(sql, nickname, email, userId);
     }
 
-    // --- 报表模块 (增强版：直接查询不依赖视图) ---
+    // --- 报表模块 ---
     public List<Map<String, Object>> findWeeklyReport(Long userId) {
-        String sql = "SELECT " +
-                     "  uh.user_habit_id, " +
-                     "  coalesce(uh.custom_name, h.habit_name) as fact_name, " +
-                     "  uh.target_value as daily_target, " +
-                     "  uh.target_unit, " +
-                     "  (SELECT coalesce(sum(r.fact_value), 0) FROM record r WHERE r.user_habit_id = uh.user_habit_id AND r.record_date >= date_sub(curdate(), interval 7 day)) as total_finished, " +
-                     "  CASE WHEN uh.frequency_unit = 'day' THEN round(uh.target_value * 7, 1) ELSE round(uh.target_value, 1) END as weekly_target " +
-                     "FROM user_habit uh " +
-                     "JOIN habit h ON uh.habit_id = h.habit_id " +
+        String sql = "SELECT uh.user_habit_id, coalesce(uh.custom_name, h.habit_name) as fact_name, " +
+                     "uh.target_value as daily_target, uh.target_unit, " +
+                     "(SELECT coalesce(sum(r.fact_value), 0) FROM record r WHERE r.user_habit_id = uh.user_habit_id AND r.record_date >= date_sub(curdate(), interval 7 day)) as total_finished, " +
+                     "CASE WHEN uh.frequency_unit = 'day' THEN round(uh.target_value * 7, 1) ELSE round(uh.target_value, 1) END as weekly_target " +
+                     "FROM user_habit uh JOIN habit h ON uh.habit_id = h.habit_id " +
                      "WHERE uh.user_id = ? AND uh.user_habit_status = true";
         List<Map<String, Object>> list = jdbcTemplate.queryForList(sql, userId);
-        // 后写计算百分比逻辑，防止 SQL 除以 0 报错
         for (Map<String, Object> map : list) {
             double finished = ((Number) map.get("total_finished")).doubleValue();
             double target = ((Number) map.get("weekly_target")).doubleValue();
@@ -57,8 +52,13 @@ public class ReportRepository {
     }
 
     public List<Map<String, Object>> getPunchTrend(Long userId) {
-        // 直接从统计表取数据，不再依赖趋势视图
         String sql = "SELECT sta_date as record_date, finished_habits as daily_total FROM statistic WHERE user_id = ? ORDER BY sta_date ASC LIMIT 7";
+        return jdbcTemplate.queryForList(sql, userId);
+    }
+
+    public List<Map<String, Object>> findWeeklyExerciseSummary(Long userId) {
+        String sql = "SELECT coalesce(sum(duration), 0) as total_duration, coalesce(sum(calories), 0) as total_calories " +
+                     "FROM exercise_record WHERE user_id = ? AND exercise_record_date >= date_sub(curdate(), interval 7 day)";
         return jdbcTemplate.queryForList(sql, userId);
     }
 
@@ -78,11 +78,9 @@ public class ReportRepository {
     }
 
     public List<Map<String, Object>> findHabitPunchHistory(Long userId) {
-        String sql = "SELECT r.*, coalesce(uh.custom_name, h.habit_name) as habit_name " +
-                     "FROM record r " +
+        String sql = "SELECT r.*, coalesce(uh.custom_name, h.habit_name) as habit_name FROM record r " +
                      "JOIN user_habit uh ON r.user_habit_id = uh.user_habit_id " +
-                     "JOIN habit h ON uh.habit_id = h.habit_id " +
-                     "WHERE uh.user_id = ? " +
+                     "JOIN habit h ON uh.habit_id = h.habit_id WHERE uh.user_id = ? " +
                      "ORDER BY r.record_date DESC, r.record_id DESC LIMIT 20";
         return jdbcTemplate.queryForList(sql, userId);
     }
@@ -99,39 +97,27 @@ public class ReportRepository {
 
     public List<Map<String, Object>> findUserHabits(Long userId) {
         String sql = "SELECT uh.*, h.habit_name as base_name, coalesce(uh.custom_name, h.habit_name) as habit_name " +
-                     "FROM user_habit uh " +
-                     "JOIN habit h ON uh.habit_id = h.habit_id " +
-                     "WHERE uh.user_id = ?"; // 去掉状态过滤，显示所有习惯
+                     "FROM user_habit uh JOIN habit h ON uh.habit_id = h.habit_id WHERE uh.user_id = ?";
         return jdbcTemplate.queryForList(sql, userId);
     }
 
     public int deleteUserHabit(Long userHabitId) {
-        String sql = "DELETE FROM user_habit WHERE user_habit_id = ?";
-        return jdbcTemplate.update(sql, userHabitId);
+        return jdbcTemplate.update("DELETE FROM user_habit WHERE user_habit_id = ?", userHabitId);
     }
 
     public int toggleHabitStatus(Long userHabitId, boolean status) {
-        String sql = "UPDATE user_habit SET user_habit_status = ?, update_time = CURRENT_TIMESTAMP WHERE user_habit_id = ?";
-        return jdbcTemplate.update(sql, status, userHabitId);
+        return jdbcTemplate.update("UPDATE user_habit SET user_habit_status = ?, update_time = CURRENT_TIMESTAMP WHERE user_habit_id = ?", status, userHabitId);
     }
 
-    /**
-     * 终极健壮版：添加习惯
-     */
     public void saveNewHabit(Long userId, String name, Double target, String unit) {
         try {
-            // 1. 尝试在字典表中查找或创建习惯名
             String findHabitSql = "SELECT habit_id FROM habit WHERE habit_name = ? LIMIT 1";
             List<Long> habitIds = jdbcTemplate.query(findHabitSql, (rs, rowNum) -> rs.getLong("habit_id"), name);
-            
             Long habitId;
             if (habitIds.isEmpty()) {
                 KeyHolder keyHolder = new GeneratedKeyHolder();
                 jdbcTemplate.update(connection -> {
-                    PreparedStatement ps = connection.prepareStatement(
-                        "INSERT INTO habit (habit_name, category) VALUES (?, '自定义')",
-                        Statement.RETURN_GENERATED_KEYS
-                    );
+                    PreparedStatement ps = connection.prepareStatement("INSERT INTO habit (habit_name, category) VALUES (?, '自定义')", Statement.RETURN_GENERATED_KEYS);
                     ps.setString(1, name);
                     return ps;
                 }, keyHolder);
@@ -139,52 +125,32 @@ public class ReportRepository {
             } else {
                 habitId = habitIds.get(0);
             }
-
-            // 2. 检查你是否已经关联了这个习惯，如果没有才插入
             String checkRelation = "SELECT count(*) FROM user_habit WHERE user_id = ? AND habit_id = ?";
-            Integer count = jdbcTemplate.queryForObject(checkRelation, Integer.class, userId, habitId);
-            
-            if (count == 0) {
-                String insertRelation = "INSERT INTO user_habit (user_id, habit_id, custom_name, target_value, target_unit, start_date, user_habit_status) " +
-                                        "VALUES (?, ?, ?, ?, ?, CURDATE(), true)";
-                jdbcTemplate.update(insertRelation, userId, habitId, name, target, unit);
+            if (jdbcTemplate.queryForObject(checkRelation, Integer.class, userId, habitId) == 0) {
+                jdbcTemplate.update("INSERT INTO user_habit (user_id, habit_id, custom_name, target_value, target_unit, start_date, user_habit_status) VALUES (?, ?, ?, ?, ?, CURDATE(), true)", userId, habitId, name, target, unit);
             } else {
-                // 如果已经关联了，就更新一下目标值（防止用户想改目标值却点了添加）
-                String updateRelation = "UPDATE user_habit SET target_value = ?, target_unit = ?, user_habit_status = true WHERE user_id = ? AND habit_id = ?";
-                jdbcTemplate.update(updateRelation, target, unit, userId, habitId);
+                jdbcTemplate.update("UPDATE user_habit SET target_value = ?, target_unit = ?, user_habit_status = true WHERE user_id = ? AND habit_id = ?", target, unit, userId, habitId);
             }
-        } catch (Exception e) {
-            System.err.println("添加习惯失败: " + e.getMessage());
-            throw new RuntimeException("数据库写入失败，请检查名称是否合法");
-        }
+        } catch (Exception e) { throw new RuntimeException("数据库写入失败"); }
     }
 
-    public int updateHabitSettings(Long userHabitId, String name, Double target, String unit, String frequency, String reminderTime) {
-        String sql = "UPDATE user_habit SET custom_name = ?, target_value = ?, target_unit = ?, frequency_unit = ?, reminder_time = ?, update_time = CURRENT_TIMESTAMP WHERE user_habit_id = ?";
-        return jdbcTemplate.update(sql, name, target, unit, frequency, reminderTime, userHabitId);
+    public int updateHabitSettings(Long id, String name, Double target, String unit, String freq, String time) {
+        return jdbcTemplate.update("UPDATE user_habit SET custom_name = ?, target_value = ?, target_unit = ?, frequency_unit = ?, reminder_time = ?, update_time = CURRENT_TIMESTAMP WHERE user_habit_id = ?", name, target, unit, freq, time, id);
     }
 
-    public int insertRecord(Long userHabitId, String recordDate, Double factValue) {
-        return insertDetailedRecord(userHabitId, recordDate, factValue, "快速打卡");
+    public int insertRecord(Long id, String date, Double val) { return insertDetailedRecord(id, date, val, "快速打卡"); }
+
+    public int insertDetailedRecord(Long id, String date, Double val, String note) {
+        return jdbcTemplate.update("INSERT INTO record (user_habit_id, record_date, fact_value, note, record_status) VALUES (?, ?, ?, ?, 1) ON DUPLICATE KEY UPDATE fact_value = fact_value + ?, note = ?, record_status = 1, update_time = CURRENT_TIMESTAMP", id, date, val, note, val, note);
     }
 
-    public int insertDetailedRecord(Long userHabitId, String recordDate, Double factValue, String note) {
-        String sql = "INSERT INTO record (user_habit_id, record_date, fact_value, note, record_status) " +
-                     "VALUES (?, ?, ?, ?, 1) " +
-                     "ON DUPLICATE KEY UPDATE fact_value = fact_value + ?, note = ?, record_status = 1, update_time = CURRENT_TIMESTAMP";
-        return jdbcTemplate.update(sql, userHabitId, recordDate, factValue, note, factValue, note);
-    }
-
-    public int saveExerciseRecord(Long userId, String type, Integer duration, Double calories, String feeling, String date, String note) {
-        String sql = "INSERT INTO exercise_record (user_id, sports_id, sports_type, duration, calories, feeling, exercise_record_date, note) " +
-                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-        return jdbcTemplate.update(sql, userId, 1L, type, duration, calories, feeling, date, note);
+    public int saveExerciseRecord(Long userId, String type, Integer dur, Double cal, String feel, String date, String note) {
+        return jdbcTemplate.update("INSERT INTO exercise_record (user_id, sports_id, sports_type, duration, calories, feeling, exercise_record_date, note) VALUES (?, 1, ?, ?, ?, ?, ?, ?)", userId, type, dur, cal, feel, date, note);
     }
 
     public void batchInsertHealthData(Long userId, List<Map<String, Object>> dataList) {
-        String sql = "INSERT INTO health_data (user_id, data_type, data_value, data_unit, record_date) VALUES (?, ?, ?, ?, ?)";
         for (Map<String, Object> data : dataList) {
-            jdbcTemplate.update(sql, userId, data.get("data_type"), data.get("data_value"), data.get("data_unit"), data.get("record_date"));
+            jdbcTemplate.update("INSERT INTO health_data (user_id, data_type, data_value, data_unit, record_date) VALUES (?, ?, ?, ?, ?)", userId, data.get("data_type"), data.get("data_value"), data.get("data_unit"), data.get("record_date"));
         }
     }
 }

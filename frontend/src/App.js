@@ -3,6 +3,8 @@ import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-ro
 import Dashboard from './Dashboard';
 import { LayoutDashboard, CheckSquare, Settings, Activity, LogOut, Heart, Plus, X, Trash2, Camera, Paperclip, Clock, Calendar, Database, UserCircle, Save, Edit3, Mail, User, Info, Flame, Thermometer, History, TrendingUp, CheckCircle, ExternalLink, Lock, UserPlus } from 'lucide-react';
 
+
+// 核心配置：腾讯云后端 API 地址 (确保末尾包含 /api)
 const API_BASE = "https://health-tracker-pro-231843-7-1410145219.sh.run.tcloudbase.com/api";
 
 // --- 用户认证组件 ---
@@ -14,6 +16,7 @@ const Auth = ({ setAuth, setUserId, setNickname }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    // 自动拼接路径
     const endpoint = isLogin ? '/login' : '/register';
     try {
       const res = await fetch(`${API_BASE}${endpoint}`, {

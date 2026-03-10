@@ -106,26 +106,38 @@ public class ReportRepository {
     }
 
     /**
-     * 核心修复：支持添加多个不同的习惯
+     * 增强版：支持添加习惯，若已存在则直接关联
      */
     public void saveNewHabit(Long userId, String name, Double target, String unit) {
-        // 1. 在 habit 基础表创建习惯定义
-        KeyHolder keyHolder = new GeneratedKeyHolder();
-        jdbcTemplate.update(connection -> {
-            PreparedStatement ps = connection.prepareStatement(
-                "INSERT INTO habit (habit_name, category) VALUES (?, '自定义')",
-                Statement.RETURN_GENERATED_KEYS
-            );
-            ps.setString(1, name);
-            return ps;
-        }, keyHolder);
+        // 1. 检查习惯是否已在字典表中
+        String checkSql = "SELECT habit_id FROM habit WHERE habit_name = ? LIMIT 1";
+        List<Long> ids = jdbcTemplate.query(checkSql, (rs, rowNum) -> rs.getLong("habit_id"), name);
+        
+        Long habitId;
+        if (ids.isEmpty()) {
+            KeyHolder keyHolder = new GeneratedKeyHolder();
+            jdbcTemplate.update(connection -> {
+                PreparedStatement ps = connection.prepareStatement(
+                    "INSERT INTO habit (habit_name, category) VALUES (?, '自定义')",
+                    Statement.RETURN_GENERATED_KEYS
+                );
+                ps.setString(1, name);
+                return ps;
+            }, keyHolder);
+            habitId = keyHolder.getKey().longValue();
+        } else {
+            habitId = ids.get(0);
+        }
 
-        Long habitId = keyHolder.getKey().longValue();
-
-        // 2. 关联到用户习惯表
-        String sql = "INSERT INTO user_habit (user_id, habit_id, custom_name, target_value, target_unit, start_date, user_habit_status) " +
-                     "VALUES (?, ?, ?, ?, ?, CURDATE(), true)";
-        jdbcTemplate.update(sql, userId, habitId, name, target, unit);
+        // 2. 检查用户是否已经有了这个习惯（防止重复关联报 500）
+        String relationCheck = "SELECT count(*) FROM user_habit WHERE user_id = ? AND habit_id = ?";
+        Integer count = jdbcTemplate.queryForObject(relationCheck, Integer.class, userId, habitId);
+        
+        if (count == 0) {
+            String sql = "INSERT INTO user_habit (user_id, habit_id, custom_name, target_value, target_unit, start_date, user_habit_status) " +
+                         "VALUES (?, ?, ?, ?, ?, CURDATE(), true)";
+            jdbcTemplate.update(sql, userId, habitId, name, target, unit);
+        }
     }
 
     public int updateHabitSettings(Long userHabitId, String name, Double target, String unit, String frequency, String reminderTime) {

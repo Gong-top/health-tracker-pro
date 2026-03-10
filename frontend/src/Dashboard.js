@@ -6,22 +6,20 @@ const Dashboard = ({ userId }) => {
   const [weeklyReport, setWeeklyReport] = useState([]);
   const [trendData, setTrendData] = useState([]);
   const [exerciseSummary, setExerciseSummary] = useState({ total_duration: 0, total_calories: 0 });
-
-  const API_BASE = "https://health-tracker-pro-231843-7-1410145219.sh.run.tcloudbase.com/api";
+// 核心配置：腾讯云后端 API 地址 (包含 /api)
+const API_BASE = "https://health-tracker-pro-231843-7-1410145219.sh.run.tcloudbase.com/api";
 
   useEffect(() => {
     const timestamp = new Date().getTime();
-    // 1. 获取周报 (只含已启用习惯)
+    // 自动通过 API_BASE 访问，不带多余前缀
     fetch(`${API_BASE}/report/weekly/${userId}?t=${timestamp}`)
       .then(res => res.json())
       .then(data => setWeeklyReport(data));
 
-    // 2. 获取打卡趋势图表数据
     fetch(`${API_BASE}/report/trend/${userId}?t=${timestamp}`)
       .then(res => res.json())
       .then(data => setTrendData(data));
 
-    // 3. 获取本周运动汇总
     fetch(`${API_BASE}/report/exercise/summary/${userId}?t=${timestamp}`)
       .then(res => res.json())
       .then(data => {
@@ -40,7 +38,7 @@ const Dashboard = ({ userId }) => {
         </div>
         <div className="flex gap-4">
           <button 
-            onClick={() => window.open(`http://localhost:8080/api/report/export/${userId}/${new Date().toISOString().slice(0,7)}`)}
+            onClick={() => window.open(`${API_BASE}/report/export/${userId}/${new Date().toISOString().slice(0,7)}`)}
             className="bg-white px-6 py-4 rounded-2xl shadow-sm border font-bold text-gray-600 hover:bg-gray-50 transition flex items-center gap-2"
           >
             <Database size={18} className="text-indigo-600"/> 导出月报 (CSV)
